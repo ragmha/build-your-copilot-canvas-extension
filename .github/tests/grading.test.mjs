@@ -70,7 +70,83 @@ const canvas = {
     );
 });
 
+test("step 2 rejects lifecycle code that never starts the renderer", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/extension.mjs`]: `
+import { startClockServer } from "./lib/server.mjs";
+const servers = new Map();
+const canvas = {
+    open: async (ctx) => {
+        let entry = servers.get(ctx.instanceId);
+        entry = { url: "http://127.0.0.1:1/" };
+        servers.set(ctx.instanceId, entry);
+        return { url: entry.url };
+    },
+    onClose: async (ctx) => {
+        const entry = servers.get(ctx.instanceId);
+        servers.delete(ctx.instanceId);
+        await entry.close();
+    },
+};
+`,
+        [`${extensionDirectory}/lib/server.mjs`]:
+            'server.listen(0, "127.0.0.1");\n',
+    });
+
+    assert.equal(
+        (await gradeStep2(root)).some((item) => !item.passed),
+        true,
+    );
+});
+
 test("step 3 accepts schema-backed durable preference wiring", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/extension.mjs`]: `
+import { CanvasError } from "@github/copilot-sdk/extension";
+import {
+    PREFERENCE_SCHEMA_PROPERTIES,
+    PreferenceValidationError,
+    createPreferenceStore,
+} from "./lib/preferences.mjs";
+const preferenceStore = createPreferenceStore();
+const canvas = {
+    actions: [
+        {
+            name: "configure",
+            inputSchema: {
+                type: "object",
+                properties: PREFERENCE_SCHEMA_PROPERTIES,
+                additionalProperties: false,
+                minProperties: 1,
+            },
+            handler: async (ctx) => {
+                try {
+                    return await preferenceStore.update(ctx.input ?? {});
+                } catch (error) {
+                    if (error instanceof PreferenceValidationError) {
+                        throw new CanvasError(error.code, error.message);
+                    }
+                    throw error;
+                }
+            },
+        },
+    ],
+};
+startClockServer({ preferenceStore });
+`,
+        [`${extensionDirectory}/lib/preferences.mjs`]: `
+const home = process.env.COPILOT_HOME;
+const path = join(home, "extensions", "flip-clock", "artifacts");
+`,
+    });
+
+    assert.equal(
+        (await gradeStep3(root)).every((item) => item.passed),
+        true,
+    );
+});
+
+test("step 3 rejects a detached or incompletely validated action", async (context) => {
     const root = await fixture(context, {
         [`${extensionDirectory}/extension.mjs`]: `
 import {
@@ -97,7 +173,7 @@ const path = join(home, "extensions", "flip-clock", "artifacts");
     });
 
     assert.equal(
-        (await gradeStep3(root)).every((item) => item.passed),
+        (await gradeStep3(root)).some((item) => !item.passed),
         true,
     );
 });

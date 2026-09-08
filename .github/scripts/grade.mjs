@@ -82,6 +82,14 @@ export async function gradeStep1(root = DEFAULT_ROOT) {
             ),
             "Add a one-sentence description that helps Copilot decide when to open the clock.",
         ),
+        check(
+            "The canvas declares an `open` handler",
+            matches(
+                source,
+                /createCanvas\s*\(\s*\{[\s\S]*\bopen\s*:\s*async\s*(?:\([^)]*\)|[^=(),\s]+)\s*=>/,
+            ),
+            "Add the `open` handler shown in Step 1 inside `createCanvas({ ... })`.",
+        ),
     ];
 }
 
@@ -110,6 +118,10 @@ export async function gradeStep2(root = DEFAULT_ROOT) {
             "`open` reuses a server by `ctx.instanceId` and returns its URL",
             matches(source, /open\s*:\s*async\s*\(\s*ctx\s*\)\s*=>/) &&
                 matches(source, /servers\.get\s*\(\s*ctx\.instanceId\s*\)/) &&
+                matches(
+                    source,
+                    /open\s*:\s*async\s*\(\s*ctx\s*\)\s*=>[\s\S]{0,1800}?startClockServer\s*\(\s*\{[\s\S]{0,600}?instanceId\s*:\s*ctx\.instanceId/,
+                ) &&
                 matches(source, /servers\.set\s*\(\s*ctx\.instanceId\s*,/) &&
                 matches(source, /url\s*:\s*(?:entry\.)?url/),
             "In `open`, get or start the server for `ctx.instanceId`, save it, and return `url: entry.url`.",
@@ -134,6 +146,10 @@ export async function gradeStep2(root = DEFAULT_ROOT) {
 
 export async function gradeStep3(root = DEFAULT_ROOT) {
     const source = await extensionSource(root);
+    const configureAction =
+        stripComments(source).match(
+            /actions\s*:\s*\[[\s\S]*?\{([\s\S]{0,2600}?name\s*:\s*["']configure["'][\s\S]{0,2600}?)\}\s*,?\s*\]/,
+        )?.[1] ?? "";
     const preferences = await readText(
         root,
         `${EXTENSION_DIRECTORY}/lib/preferences.mjs`,
@@ -154,22 +170,32 @@ export async function gradeStep3(root = DEFAULT_ROOT) {
         ),
         check(
             "A validated `configure` action is declared",
-            matches(source, /name\s*:\s*["']configure["']/) &&
-                matches(
-                    source,
-                    /properties\s*:\s*PREFERENCE_SCHEMA_PROPERTIES/,
+            /name\s*:\s*["']configure["']/.test(configureAction) &&
+                /inputSchema\s*:\s*\{[\s\S]*?type\s*:\s*["']object["']/.test(
+                    configureAction,
                 ) &&
-                matches(source, /additionalProperties\s*:\s*false/) &&
-                matches(source, /minProperties\s*:\s*1/),
-            "Add a `configure` action using `PREFERENCE_SCHEMA_PROPERTIES`, `additionalProperties: false`, and `minProperties: 1`.",
+                /properties\s*:\s*PREFERENCE_SCHEMA_PROPERTIES/.test(
+                    configureAction,
+                ) &&
+                /additionalProperties\s*:\s*false/.test(configureAction) &&
+                /minProperties\s*:\s*1/.test(configureAction),
+            "Add `configure` inside the canvas `actions` array with an object schema, `PREFERENCE_SCHEMA_PROPERTIES`, `additionalProperties: false`, and `minProperties: 1`.",
         ),
         check(
             "The action returns the preference update result directly",
             matches(
-                source,
+                configureAction,
                 /handler\s*:\s*async\s*\(\s*ctx\s*\)\s*=>\s*(?:\{[\s\S]*?return\s+)?await\s+preferenceStore\.update\s*\(\s*ctx\.input\s*\?\?\s*\{\}\s*\)/,
             ),
             "Return `await preferenceStore.update(ctx.input ?? {})` directly; canvas action results are not wrapped.",
+        ),
+        check(
+            "Expected validation failures become `CanvasError` results",
+            /PreferenceValidationError/.test(configureAction) &&
+                /throw\s+new\s+CanvasError\s*\(\s*error\.code\s*,\s*error\.message\s*\)/.test(
+                    configureAction,
+                ),
+            "Catch `PreferenceValidationError` in the configure handler and throw `new CanvasError(error.code, error.message)`.",
         ),
         check(
             "The loopback server receives the shared preference store",

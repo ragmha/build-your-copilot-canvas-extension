@@ -49,19 +49,22 @@ test("workflow chain uses the pinned toolkit and current checkout action", async
         "2-step.yml",
         "3-step.yml",
         "4-last-step.yml",
+        "validate-source.yml",
     ]);
 
     for (const name of names) {
         const workflow = await read(`.github/workflows/${name}`);
         assert.doesNotMatch(workflow, /replace-me/);
-        assert.match(workflow, /skills\/exercise-toolkit/);
         if (name !== "0-start-exercise.yml") {
             assert.match(workflow, /actions\/checkout@v6/);
         }
-        assert.doesNotMatch(
-            workflow,
-            /skills\/exercise-toolkit[^@\n]*@(?!v0\.9\.1)/,
-        );
+        if (name !== "validate-source.yml") {
+            assert.match(workflow, /skills\/exercise-toolkit/);
+            assert.doesNotMatch(
+                workflow,
+                /skills\/exercise-toolkit[^@\n]*@(?!v0\.9\.1)/,
+            );
+        }
     }
 });
 
@@ -84,11 +87,22 @@ test("step triggers are narrow and advance one workflow at a time", async () => 
 
     assert.match(
         step4,
-        /paths:\s*\n\s+- "\.github\/extensions\/flip-clock\/copilot-extension\.json"/,
+        /paths:[\s\S]*"\.github\/extensions\/flip-clock\/extension\.mjs"[\s\S]*"\.github\/extensions\/flip-clock\/copilot-extension\.json"/,
     );
     assert.match(step4, /finish-exercise\.yml@v0\.9\.1/);
     assert.match(step4, /comment-author: "github-actions\[bot\]"/);
     assert.match(step4, /--repo "\$\{\{ github\.repository \}\}" \|\| true/);
+});
+
+test("source validation runs only in the template repository", async () => {
+    const workflow = await read(".github/workflows/validate-source.yml");
+
+    assert.match(
+        workflow,
+        /github\.repository == 'ragmha\/build-your-copilot-canvas-extension'/,
+    );
+    assert.match(workflow, /node --test/);
+    assert.match(workflow, /node \.github\/scripts\/grade\.mjs 4/);
 });
 
 test("README contains the official copy flow and runtime limitation", async () => {
