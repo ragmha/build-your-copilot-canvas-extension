@@ -49,6 +49,6 @@ jobs:
       - name: Confirm the starter has not advanced
         run: |
           ! node .github/scripts/grade.mjs 1
-          ! node .github/scripts/grade.mjs 2
-          ! node .github/scripts/grade.mjs 3
-          ! node .github/scripts/grade.mjs 4
+          ! node .github/scripts/grade.mjs 2 --cumulative
+          ! node .github/scripts/grade.mjs 3 --cumulative
+          ! node .github/scripts/grade.mjs 4 --cumulative

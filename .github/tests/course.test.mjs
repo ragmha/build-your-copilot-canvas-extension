@@ -90,6 +90,9 @@ test("step triggers are narrow and advance one workflow at a time", async () => 
         /paths:[\s\S]*"\.github\/extensions\/flip-clock\/extension\.mjs"[\s\S]*"\.github\/extensions\/flip-clock\/copilot-extension\.json"/,
     );
     assert.match(step4, /finish-exercise\.yml@v0\.9\.1/);
+    assert.match(step2, /grade\.mjs 2 --cumulative/);
+    assert.match(step3, /grade\.mjs 3 --cumulative/);
+    assert.match(step4, /grade\.mjs 4 --cumulative/);
     assert.match(
         step4,
         /node --check \.github\/extensions\/flip-clock\/extension\.mjs/,

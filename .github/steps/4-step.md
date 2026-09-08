@@ -36,7 +36,7 @@ sharing and installation tools.
     ```bash
     node --check .github/extensions/flip-clock/extension.mjs
     node --test .github/extensions/flip-clock/tests/*.test.mjs
-    node .github/scripts/grade.mjs 4
+    node .github/scripts/grade.mjs 4 --cumulative
     ```
 
 1. Commit and push the manifest. The **Step 4** workflow performs the final

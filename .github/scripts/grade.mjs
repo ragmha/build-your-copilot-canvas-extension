@@ -302,6 +302,17 @@ export async function gradeStep(step, root = DEFAULT_ROOT) {
     return grader(root);
 }
 
+export async function gradeThrough(step, root = DEFAULT_ROOT) {
+    const results = [];
+    for (let currentStep = 1; currentStep <= step; currentStep += 1) {
+        results.push({
+            step: currentStep,
+            checks: await gradeStep(currentStep, root),
+        });
+    }
+    return results;
+}
+
 export function renderReport(step, checks) {
     const passed = checks.filter((item) => item.passed).length;
     const lines = [
@@ -334,10 +345,25 @@ export function renderReport(step, checks) {
 
 async function main() {
     const step = Number.parseInt(process.argv[2], 10);
-    const root = process.argv[3] ? resolve(process.argv[3]) : DEFAULT_ROOT;
-    const checks = await gradeStep(step, root);
-    process.stdout.write(renderReport(step, checks));
-    if (checks.some((item) => !item.passed)) {
+    const cumulative = process.argv.includes("--cumulative");
+    const rootArgument = process.argv
+        .slice(3)
+        .find((argument) => argument !== "--cumulative");
+    const root = rootArgument ? resolve(rootArgument) : DEFAULT_ROOT;
+    const results = cumulative
+        ? await gradeThrough(step, root)
+        : [{ step, checks: await gradeStep(step, root) }];
+
+    process.stdout.write(
+        results
+            .map((result) => renderReport(result.step, result.checks))
+            .join("\n"),
+    );
+    if (
+        results.some((result) =>
+            result.checks.some((item) => !item.passed),
+        )
+    ) {
         process.exitCode = 1;
     }
 }

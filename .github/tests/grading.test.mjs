@@ -10,6 +10,7 @@ import {
     gradeStep2,
     gradeStep3,
     gradeStep4,
+    gradeThrough,
     renderReport,
 } from "../scripts/grade.mjs";
 
@@ -387,4 +388,43 @@ response.setHeader("Content-Security-Policy", policy);
             `Step ${step}: ${JSON.stringify(checks)}`,
         );
     }
+
+    const cumulative = await gradeThrough(4, root);
+    assert.equal(cumulative.length, 4);
+    assert.equal(
+        cumulative.every((result) =>
+            result.checks.every((item) => item.passed),
+        ),
+        true,
+    );
+});
+
+test("cumulative grading catches removed earlier functionality", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/extension.mjs`]: "session.log('ready');\n",
+        [`${extensionDirectory}/lib/server.mjs`]:
+            "server.listen(0, '127.0.0.1'); randomBytes(); timingSafeEqual(); response.setHeader('Content-Security-Policy', policy);\n",
+        [`${extensionDirectory}/lib/preferences.mjs`]: `
+const home = process.env.COPILOT_HOME;
+const path = join(home, "extensions", "flip-clock", "artifacts");
+`,
+        [`${extensionDirectory}/copilot-extension.json`]:
+            '{"name":"flip-clock","version":1}\n',
+        [`${extensionDirectory}/assets/styles.css`]:
+            "@media (prefers-reduced-motion: reduce) {}\n",
+        [`${extensionDirectory}/assets/index.html`]:
+            '<time id="accessibleTime"></time><button aria-label="Open clock settings"></button>\n',
+    });
+
+    const results = await gradeThrough(4, root);
+    assert.equal(
+        results[3].checks.every((item) => item.passed),
+        true,
+    );
+    assert.equal(
+        results.slice(0, 3).some((result) =>
+            result.checks.some((item) => !item.passed),
+        ),
+        true,
+    );
 });

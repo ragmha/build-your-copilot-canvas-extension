@@ -70,7 +70,7 @@ jobs:
       - name: Check package and hardening
         id: grade-structure
         continue-on-error: true
-        run: node .github/scripts/grade.mjs 4 > step-feedback.md
+        run: node .github/scripts/grade.mjs 4 --cumulative > step-feedback.md
 
       - name: Run complete module tests
         id: test-modules

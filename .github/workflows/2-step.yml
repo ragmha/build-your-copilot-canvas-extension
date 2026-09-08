@@ -69,7 +69,7 @@ jobs:
       - name: Check renderer lifecycle
         id: grade-structure
         continue-on-error: true
-        run: node .github/scripts/grade.mjs 2 > step-feedback.md
+        run: node .github/scripts/grade.mjs 2 --cumulative > step-feedback.md
 
       - name: Test loopback renderer
         id: test-renderer

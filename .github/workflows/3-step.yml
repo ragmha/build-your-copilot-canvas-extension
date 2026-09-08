@@ -69,7 +69,7 @@ jobs:
       - name: Check action and preference wiring
         id: grade-structure
         continue-on-error: true
-        run: node .github/scripts/grade.mjs 3 > step-feedback.md
+        run: node .github/scripts/grade.mjs 3 --cumulative > step-feedback.md
 
       - name: Test preference behavior
         id: test-preferences
