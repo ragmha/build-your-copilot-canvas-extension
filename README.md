@@ -5,8 +5,8 @@ declares, serves, configures, and packages a canvas.
 
 <img
   width="900"
-  alt="A dark split-flap Flip Clock canvas"
-  src=".github/images/flip-clock-preview.svg"
+  alt="The finished Flip Clock canvas showing 09:01 PM in a dark split-flap design"
+  src=".github/images/flip-clock-preview.webp"
 />
 
 ## Welcome

@@ -135,6 +135,13 @@ test("README contains the official copy flow and runtime limitation", async () =
 
     assert.match(
         readme,
+        /src="\.github\/images\/flip-clock-preview\.webp"/,
+    );
+    await fs.access(
+        new URL(".github/images/flip-clock-preview.webp", root),
+    );
+    assert.match(
+        readme,
         /template_owner=ragmha&template_name=build-your-copilot-canvas-extension/,
     );
     assert.match(readme, /canvas API is experimental/i);
