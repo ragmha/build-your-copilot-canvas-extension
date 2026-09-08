@@ -1,4 +1,4 @@
-name: Step 2
+name: Step 4
 
 on:
   workflow_dispatch:
@@ -9,12 +9,12 @@ on:
       - ".github/extensions/flip-clock/**"
 
 permissions:
-  contents: read
+  contents: write
   actions: write
   issues: write
 
 env:
-  STEP_3_FILE: ".github/steps/3-step.md"
+  REVIEW_FILE: ".github/steps/x-review.md"
 
 jobs:
   find_exercise:
@@ -30,9 +30,10 @@ jobs:
     uses: skills/exercise-toolkit/.github/workflows/find-exercise-issue.yml@v0.9.1
 
   check_step_work:
-    name: Grade Step 2
+    name: Grade Step 4
     needs: [find_exercise]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       ISSUE_REPOSITORY: ${{ github.repository }}
       ISSUE_NUMBER: ${{ needs.find_exercise.outputs.issue-number }}
@@ -66,24 +67,42 @@ jobs:
           file: exercise-toolkit/markdown-templates/step-feedback/checking-work.md
           edit-mode: replace
 
-      - name: Check renderer lifecycle
+      - name: Check package and hardening
         id: grade-structure
         continue-on-error: true
-        run: node .github/scripts/grade.mjs 2 --cumulative > step-feedback.md
+        run: node .github/scripts/grade.mjs 4 --cumulative > step-feedback.md
 
-      - name: Test loopback renderer
-        id: test-renderer
+      - name: Run complete module tests
+        id: test-modules
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          node --test .github/extensions/flip-clock/tests/server.test.mjs > test-output.txt 2>&1
+          node --test .github/extensions/flip-clock/tests/*.test.mjs > test-output.txt 2>&1
           status=$?
           if [ "$status" -eq 0 ]; then
-            printf '\n### Renderer tests\n\n✅ The loopback server tests passed.\n' >> step-feedback.md
+            printf '\n### Complete test suite\n\n✅ All deterministic module tests passed.\n' >> step-feedback.md
           else
-            printf '\n### Renderer tests\n\n❌ The loopback server tests failed.\n\n```text\n' >> step-feedback.md
+            printf '\n### Complete test suite\n\n❌ One or more module tests failed.\n\n```text\n' >> step-feedback.md
             cat test-output.txt >> step-feedback.md
+            printf '```\n' >> step-feedback.md
+          fi
+          exit "$status"
+
+      - name: Check extension and renderer syntax
+        id: check-syntax
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          status=0
+          node --check .github/extensions/flip-clock/extension.mjs > syntax-output.txt 2>&1 || status=$?
+          node --check .github/extensions/flip-clock/assets/app.js >> syntax-output.txt 2>&1 || status=$?
+          if [ "$status" -eq 0 ]; then
+            printf '\n### Runtime syntax\n\n✅ `extension.mjs` and `assets/app.js` parse successfully.\n' >> step-feedback.md
+          else
+            printf '\n### Runtime syntax\n\n❌ Fix the extension or renderer syntax error below, then push again.\n\n```text\n' >> step-feedback.md
+            cat syntax-output.txt >> step-feedback.md
             printf '```\n' >> step-feedback.md
           fi
           exit "$status"
@@ -101,11 +120,12 @@ jobs:
       - name: Fail when a check needs work
         if: |
           steps.grade-structure.outcome == 'failure' ||
-          steps.test-renderer.outcome == 'failure'
+          steps.test-modules.outcome == 'failure' ||
+          steps.check-syntax.outcome == 'failure'
         run: exit 1
 
-  post_next_step_content:
-    name: Post Step 3
+  post_review_content:
+    name: Post review
     needs: [find_exercise, check_step_work]
     runs-on: ubuntu-latest
     env:
@@ -123,34 +143,31 @@ jobs:
           path: exercise-toolkit
           ref: v0.9.1
 
-      - name: Mark Step 2 complete
+      - name: Mark final step complete
         uses: GrantBirki/comment@v2.1.1
         with:
           repository: ${{ env.ISSUE_REPOSITORY }}
           issue-number: ${{ env.ISSUE_NUMBER }}
-          file: exercise-toolkit/markdown-templates/step-feedback/step-finished-prepare-next-step.md
-          vars: |
-            next_step_number: 3
+          file: exercise-toolkit/markdown-templates/step-feedback/lesson-review.md
 
-      - name: Add Step 3
+      - name: Add review
         uses: GrantBirki/comment@v2.1.1
         with:
           repository: ${{ env.ISSUE_REPOSITORY }}
           issue-number: ${{ env.ISSUE_NUMBER }}
-          file: ${{ env.STEP_3_FILE }}
+          file: ${{ env.REVIEW_FILE }}
 
-      - name: Watch for progress
-        uses: GrantBirki/comment@v2.1.1
-        with:
-          repository: ${{ env.ISSUE_REPOSITORY }}
-          issue-number: ${{ env.ISSUE_NUMBER }}
-          file: exercise-toolkit/markdown-templates/step-feedback/watching-for-progress.md
-
-      - name: Advance workflow state
+      - name: Disable final workflow
         run: |
           gh workflow disable "${{ github.workflow }}" \
             --repo "${{ github.repository }}" || true
-          gh workflow enable "Step 3" \
-            --repo "${{ github.repository }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  finish_exercise:
+    name: Finish Exercise
+    needs: [find_exercise, post_review_content]
+    uses: skills/exercise-toolkit/.github/workflows/finish-exercise.yml@v0.9.1
+    with:
+      issue-url: ${{ needs.find_exercise.outputs.issue-url }}
+      exercise-title: "Build a Copilot Canvas Extension"

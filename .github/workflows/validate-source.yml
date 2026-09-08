@@ -1,0 +1,57 @@
+name: Validate exercise source
+
+on:
+  pull_request:
+    paths:
+      - ".devcontainer/**"
+      - ".github/extensions/flip-clock/**"
+      - ".github/images/**"
+      - ".github/scripts/**"
+      - ".github/steps/**"
+      - ".github/tests/**"
+      - ".github/workflows/**"
+      - "CODE_OF_CONDUCT.md"
+      - "LICENSE"
+      - "README.md"
+  push:
+    branches:
+      - main
+    paths:
+      - ".devcontainer/**"
+      - ".github/extensions/flip-clock/**"
+      - ".github/images/**"
+      - ".github/scripts/**"
+      - ".github/steps/**"
+      - ".github/tests/**"
+      - ".github/workflows/**"
+      - "CODE_OF_CONDUCT.md"
+      - "LICENSE"
+      - "README.md"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: ${{ github.repository == 'ragmha/build-your-copilot-canvas-extension' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run exercise and grader tests
+        run: node --test .github/extensions/flip-clock/tests/*.test.mjs .github/tests/*.test.mjs
+
+      - name: Check JavaScript syntax
+        run: |
+          find .github -name '*.mjs' -print0 | xargs -0 -n1 node --check
+          node --check .github/extensions/flip-clock/assets/app.js
+
+      - name: Confirm the starter has not advanced
+        run: |
+          ! node .github/scripts/grade.mjs 1
+          ! node .github/scripts/grade.mjs 2 --cumulative
+          ! node .github/scripts/grade.mjs 3 --cumulative
+          ! node .github/scripts/grade.mjs 4 --cumulative

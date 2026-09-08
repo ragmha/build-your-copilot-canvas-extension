@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+        <meta name="color-scheme" content="dark light" />
+        <title>Flip Clock</title>
+        <link rel="stylesheet" href="/styles.css" />
+        <script type="module" src="/app.js"></script>
+    </head>
+    <body data-theme="obsidian">
+        <div class="app" id="app">
+            <div class="instrument-frame" aria-hidden="true"></div>
+
+            <header class="topbar">
+                <p class="date-line">
+                    <span id="weekdayLabel">Today</span>
+                    <span class="date-separator" aria-hidden="true"></span>
+                    <span id="dateLabel">Loading time</span>
+                </p>
+
+                <button
+                    class="icon-button"
+                    id="settingsButton"
+                    type="button"
+                    aria-label="Open clock settings"
+                    title="Clock settings"
+                >
+                    <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        width="20"
+                        height="20"
+                    >
+                        <path
+                            d="M12 8.25A3.75 3.75 0 1 0 12 15.75 3.75 3.75 0 0 0 12 8.25ZM19.18 13.5a7.56 7.56 0 0 0 .07-1 7.56 7.56 0 0 0-.07-1l2-1.56-1.9-3.29-2.36.95a7.4 7.4 0 0 0-1.72-1L14.84 4h-3.8l-.36 2.6a7.4 7.4 0 0 0-1.72 1L6.6 6.65 4.7 9.94l2 1.56a7.56 7.56 0 0 0-.07 1c0 .34.02.67.07 1l-2 1.56 1.9 3.29 2.36-.95c.52.41 1.1.75 1.72 1l.36 2.6h3.8l.36-2.6a7.4 7.4 0 0 0 1.72-1l2.36.95 1.9-3.29-2-1.56Z"
+                        />
+                    </svg>
+                </button>
+            </header>
+
+            <main class="clock-stage">
+                <time id="accessibleTime" class="sr-only"></time>
+
+                <div class="clock-grid" aria-hidden="true">
+                    <section class="flip-card" id="hourCard">
+                        <span class="period-label" id="periodLabel"></span>
+                        <div class="flap-half flap-half-top">
+                            <span class="flap-number" data-role="top">--</span>
+                        </div>
+                        <div class="flap-half flap-half-bottom">
+                            <span class="flap-number" data-role="bottom">--</span>
+                        </div>
+                        <div class="flap-leaf flap-leaf-front">
+                            <span class="flap-number" data-role="front">--</span>
+                        </div>
+                        <div class="flap-leaf flap-leaf-back">
+                            <span class="flap-number" data-role="back">--</span>
+                        </div>
+                        <span class="hinge-line"></span>
+                    </section>
+
+                    <section class="flip-card" id="minuteCard">
+                        <div class="flap-half flap-half-top">
+                            <span class="flap-number" data-role="top">--</span>
+                        </div>
+                        <div class="flap-half flap-half-bottom">
+                            <span class="flap-number" data-role="bottom">--</span>
+                        </div>
+                        <div class="flap-leaf flap-leaf-front">
+                            <span class="flap-number" data-role="front">--</span>
+                        </div>
+                        <div class="flap-leaf flap-leaf-back">
+                            <span class="flap-number" data-role="back">--</span>
+                        </div>
+                        <span class="hinge-line"></span>
+                    </section>
+                </div>
+            </main>
+
+            <footer class="clock-footer">
+                <button class="timezone-button" id="timezoneButton" type="button">
+                    <span class="timezone-dot" aria-hidden="true"></span>
+                    <span id="timezoneLabel">Local time</span>
+                </button>
+                <p class="system-status" id="systemStatus" role="status">
+                    On device
+                </p>
+            </footer>
+        </div>
+
+        <dialog class="settings-dialog" id="settingsDialog">
+            <form class="settings-form" id="settingsForm">
+                <div class="settings-heading">
+                    <div>
+                        <h1>Clock settings</h1>
+                        <p>Shape the instrument without interrupting it.</p>
+                    </div>
+                    <button
+                        class="icon-button dialog-close"
+                        id="closeSettingsButton"
+                        type="button"
+                        aria-label="Close clock settings"
+                    >
+                        <svg
+                            aria-hidden="true"
+                            viewBox="0 0 24 24"
+                            width="20"
+                            height="20"
+                        >
+                            <path d="m6.7 5.3 12 12-1.4 1.4-12-12 1.4-1.4Z" />
+                            <path d="m17.3 5.3 1.4 1.4-12 12-1.4-1.4 12-12Z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <label class="field-label" for="timezoneInput">Timezone</label>
+                <input
+                    class="text-input"
+                    id="timezoneInput"
+                    name="timeZone"
+                    list="timezoneOptions"
+                    autocomplete="off"
+                    spellcheck="false"
+                    required
+                />
+                <datalist id="timezoneOptions"></datalist>
+
+                <fieldset>
+                    <legend>Hour cycle</legend>
+                    <div class="segmented-control">
+                        <label>
+                            <input type="radio" name="hourCycle" value="12" />
+                            <span>12 hour</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="hourCycle" value="24" />
+                            <span>24 hour</span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Theme</legend>
+                    <div class="theme-options">
+                        <label class="theme-option">
+                            <input
+                                type="radio"
+                                name="theme"
+                                value="obsidian"
+                            />
+                            <span class="theme-preview theme-preview-obsidian">
+                                <i></i><i></i>
+                            </span>
+                            <span>Obsidian</span>
+                        </label>
+                        <label class="theme-option">
+                            <input
+                                type="radio"
+                                name="theme"
+                                value="porcelain"
+                            />
+                            <span class="theme-preview theme-preview-porcelain">
+                                <i></i><i></i>
+                            </span>
+                            <span>Porcelain</span>
+                        </label>
+                        <label class="theme-option">
+                            <input
+                                type="radio"
+                                name="theme"
+                                value="midnight"
+                            />
+                            <span class="theme-preview theme-preview-midnight">
+                                <i></i><i></i>
+                            </span>
+                            <span>Midnight</span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Motion</legend>
+                    <div class="motion-options">
+                        <label>
+                            <input type="radio" name="motion" value="system" />
+                            <span>
+                                <strong>System</strong>
+                                <small>Follow your device preference</small>
+                            </span>
+                        </label>
+                        <label>
+                            <input type="radio" name="motion" value="full" />
+                            <span>
+                                <strong>Flip</strong>
+                                <small>Always animate changed digits</small>
+                            </span>
+                        </label>
+                        <label>
+                            <input type="radio" name="motion" value="reduced" />
+                            <span>
+                                <strong>Still</strong>
+                                <small>Update without animation</small>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <p class="form-message" id="formMessage" role="status"></p>
+
+                <div class="form-actions">
+                    <button
+                        class="button button-secondary"
+                        id="resetButton"
+                        type="button"
+                    >
+                        Reset
+                    </button>
+                    <button
+                        class="button button-primary"
+                        id="saveButton"
+                        type="submit"
+                    >
+                        Save settings
+                    </button>
+                </div>
+            </form>
+        </dialog>
+    </body>
+</html>

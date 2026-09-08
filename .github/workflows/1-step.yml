@@ -2,12 +2,11 @@ name: Step 1
 
 on:
   workflow_dispatch:
-  # Common event triggers: pull_request, push, issues, issue_comment (feel free to experiment)
-  # Docs: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows
-  # Example:
-  # pull_request:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/extensions/flip-clock/extension.mjs"
 
 permissions:
   contents: read
@@ -20,10 +19,18 @@ env:
 jobs:
   find_exercise:
     name: Find Exercise Issue
+    if: >-
+      ${{
+        github.repository != 'ragmha/build-your-copilot-canvas-extension' &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          github.event.head_commit.message != 'Initial commit'
+        )
+      }}
     uses: skills/exercise-toolkit/.github/workflows/find-exercise-issue.yml@v0.9.1
 
-  post_next_step_content:
-    name: Post next step content
+  check_step_work:
+    name: Grade Step 1
     needs: [find_exercise]
     runs-on: ubuntu-latest
     env:
@@ -41,7 +48,82 @@ jobs:
           path: exercise-toolkit
           ref: v0.9.1
 
-      - name: Create comment - step finished
+      - name: Find progress comment
+        id: find-last-comment
+        uses: peter-evans/find-comment@v4
+        with:
+          repository: ${{ env.ISSUE_REPOSITORY }}
+          issue-number: ${{ env.ISSUE_NUMBER }}
+          comment-author: "github-actions[bot]"
+          direction: last
+
+      - name: Show checking status
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          repository: ${{ env.ISSUE_REPOSITORY }}
+          issue-number: ${{ env.ISSUE_NUMBER }}
+          comment-id: ${{ steps.find-last-comment.outputs.comment-id }}
+          file: exercise-toolkit/markdown-templates/step-feedback/checking-work.md
+          edit-mode: replace
+
+      - name: Check extension declaration
+        id: grade-structure
+        continue-on-error: true
+        run: node .github/scripts/grade.mjs 1 > step-feedback.md
+
+      - name: Check JavaScript syntax
+        id: check-syntax
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          node --check .github/extensions/flip-clock/extension.mjs > syntax-output.txt 2>&1
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            printf '\n### JavaScript syntax\n\n✅ `extension.mjs` parses successfully.\n' >> step-feedback.md
+          else
+            printf '\n### JavaScript syntax\n\n❌ Fix the syntax error below, then push again.\n\n```text\n' >> step-feedback.md
+            cat syntax-output.txt >> step-feedback.md
+            printf '```\n' >> step-feedback.md
+          fi
+          exit "$status"
+
+      - name: Post step results
+        if: ${{ always() }}
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          repository: ${{ env.ISSUE_REPOSITORY }}
+          issue-number: ${{ env.ISSUE_NUMBER }}
+          comment-id: ${{ steps.find-last-comment.outputs.comment-id }}
+          file: step-feedback.md
+          edit-mode: replace
+
+      - name: Fail when a check needs work
+        if: |
+          steps.grade-structure.outcome == 'failure' ||
+          steps.check-syntax.outcome == 'failure'
+        run: exit 1
+
+  post_next_step_content:
+    name: Post Step 2
+    needs: [find_exercise, check_step_work]
+    runs-on: ubuntu-latest
+    env:
+      ISSUE_REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ needs.find_exercise.outputs.issue-number }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Get response templates
+        uses: actions/checkout@v6
+        with:
+          repository: skills/exercise-toolkit
+          path: exercise-toolkit
+          ref: v0.9.1
+
+      - name: Mark Step 1 complete
         uses: GrantBirki/comment@v2.1.1
         with:
           repository: ${{ env.ISSUE_REPOSITORY }}
@@ -50,23 +132,25 @@ jobs:
           vars: |
             next_step_number: 2
 
-      - name: Create comment - add step content
+      - name: Add Step 2
         uses: GrantBirki/comment@v2.1.1
         with:
           repository: ${{ env.ISSUE_REPOSITORY }}
           issue-number: ${{ env.ISSUE_NUMBER }}
           file: ${{ env.STEP_2_FILE }}
 
-      - name: Create comment - watching for progress
+      - name: Watch for progress
         uses: GrantBirki/comment@v2.1.1
         with:
           repository: ${{ env.ISSUE_REPOSITORY }}
           issue-number: ${{ env.ISSUE_NUMBER }}
           file: exercise-toolkit/markdown-templates/step-feedback/watching-for-progress.md
 
-      - name: Disable current workflow and enable next one
+      - name: Advance workflow state
         run: |
-          gh workflow disable "${{github.workflow}}"
-          gh workflow enable "Step 2"
+          gh workflow disable "${{ github.workflow }}" \
+            --repo "${{ github.repository }}" || true
+          gh workflow enable "Step 2" \
+            --repo "${{ github.repository }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
