@@ -33,6 +33,7 @@ jobs:
     name: Grade Step 4
     needs: [find_exercise]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       ISSUE_REPOSITORY: ${{ github.repository }}
       ISSUE_NUMBER: ${{ needs.find_exercise.outputs.issue-number }}

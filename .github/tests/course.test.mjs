@@ -93,6 +93,7 @@ test("step triggers are narrow and advance one workflow at a time", async () => 
         );
     }
     assert.match(step4, /finish-exercise\.yml@v0\.9\.1/);
+    assert.match(step4, /timeout-minutes:\s*10/);
     assert.match(step2, /grade\.mjs 2 --cumulative/);
     assert.match(step3, /grade\.mjs 3 --cumulative/);
     assert.match(step4, /grade\.mjs 4 --cumulative/);
@@ -116,6 +117,7 @@ test("source validation runs only in the template repository", async () => {
         /github\.repository == 'ragmha\/build-your-copilot-canvas-extension'/,
     );
     assert.match(workflow, /node --test/);
+    assert.match(workflow, /timeout-minutes:\s*10/);
     assert.match(
         workflow,
         /node --check \.github\/extensions\/flip-clock\/assets\/app\.js/,

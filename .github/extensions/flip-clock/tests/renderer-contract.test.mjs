@@ -1,187 +1,133 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
+const execFileAsync = promisify(execFile);
 const assetDirectory = new URL("../assets/", import.meta.url);
+const smokeScript = fileURLToPath(
+    new URL("../../../scripts/renderer-smoke.mjs", import.meta.url),
+);
+const appPath = fileURLToPath(new URL("app.js", assetDirectory));
+const htmlPath = fileURLToPath(new URL("index.html", assetDirectory));
+const SMOKE_TIMEOUT_MS = 2_000;
 
-test("renderer imports exist and required DOM IDs are present", async () => {
-    const [appSource, html] = await Promise.all([
-        fs.readFile(new URL("app.js", assetDirectory), "utf8"),
-        fs.readFile(new URL("index.html", assetDirectory), "utf8"),
-    ]);
-
-    const imports = [
-        ...appSource.matchAll(/from\s+["'](\.[^"']+)["']/g),
-    ].map((match) => match[1]);
-    assert.deepEqual(imports, ["./clock-core.js"]);
-
-    for (const specifier of imports) {
-        await fs.access(new URL(specifier, new URL("app.js", assetDirectory)));
-    }
-
-    const requiredIds = new Set(
-        [...appSource.matchAll(/querySelector\(\s*["']#([^"']+)["']\s*\)/g)]
-            .map((match) => match[1]),
+function runSmoke({
+    targetAppPath = appPath,
+    targetHtmlPath = htmlPath,
+    timeout = SMOKE_TIMEOUT_MS,
+} = {}) {
+    return execFileAsync(
+        process.execPath,
+        [smokeScript, targetAppPath, targetHtmlPath],
+        {
+            timeout,
+            killSignal: "SIGKILL",
+            maxBuffer: 128 * 1024,
+        },
     );
-    assert.ok(requiredIds.size >= 15);
+}
 
-    for (const id of requiredIds) {
-        assert.match(
+async function createFixture(context, { app, html }) {
+    const directory = await fs.mkdtemp(
+        join(tmpdir(), "flip-clock-renderer-"),
+    );
+    context.after(() =>
+        fs.rm(directory, { recursive: true, force: true }),
+    );
+
+    const fixtureAppPath = join(directory, "app.js");
+    const fixtureHtmlPath = join(directory, "index.html");
+    await Promise.all([
+        fs.writeFile(fixtureAppPath, app, "utf8"),
+        fs.writeFile(fixtureHtmlPath, html, "utf8"),
+        fs.copyFile(
+            fileURLToPath(new URL("clock-core.js", assetDirectory)),
+            join(directory, "clock-core.js"),
+        ),
+    ]);
+    return {
+        targetAppPath: fixtureAppPath,
+        targetHtmlPath: fixtureHtmlPath,
+    };
+}
+
+test(
+    "renderer imports, DOM contract, and initialization pass",
+    { timeout: SMOKE_TIMEOUT_MS + 1_000 },
+    async () => {
+        await runSmoke();
+    },
+);
+
+test(
+    "renderer smoke terminates an app that does not finish importing",
+    { timeout: 2_000 },
+    async (context) => {
+        const [app, html] = await Promise.all([
+            fs.readFile(appPath, "utf8"),
+            fs.readFile(htmlPath, "utf8"),
+        ]);
+        const fixture = await createFixture(context, {
+            app: `${app}\nwhile (true) {}\n`,
             html,
-            new RegExp(`\\bid=["']${id}["']`),
-            `index.html is missing #${id}`,
-        );
-    }
-
-    assert.match(
-        html,
-        /<script\s+type=["']module["']\s+src=["']\/app\.js["']/,
-    );
-    assert.match(
-        html,
-        /<link\s+rel=["']stylesheet["']\s+href=["']\/styles\.css["']/,
-    );
-});
-
-test("renderer initializes against its documented DOM contract", async (context) => {
-    const [appSource, clockCoreSource] = await Promise.all([
-        fs.readFile(new URL("app.js", assetDirectory), "utf8"),
-        fs.readFile(new URL("clock-core.js", assetDirectory), "utf8"),
-    ]);
-    const elements = new Map();
-
-    class FakeElement {
-        constructor() {
-            this.classList = {
-                add() {},
-                remove() {},
-            };
-            this.dataset = {};
-            this.style = { setProperty() {} };
-            this.textContent = "";
-            this.hidden = false;
-            this.open = false;
-            this.value = "";
-            this.disabled = false;
-            this.title = "";
-            this.dateTime = "";
-            this.offsetWidth = 1;
-        }
-
-        addEventListener() {}
-
-        append() {}
-
-        close() {
-            this.open = false;
-        }
-
-        focus() {}
-
-        querySelector() {
-            return new FakeElement();
-        }
-
-        replaceChildren() {}
-
-        showModal() {
-            this.open = true;
-        }
-
-        toggleAttribute() {}
-    }
-
-    const document = {
-        body: new FakeElement(),
-        hidden: false,
-        title: "",
-        addEventListener() {},
-        createDocumentFragment: () => new FakeElement(),
-        createElement: () => new FakeElement(),
-        querySelector(selector) {
-            if (!elements.has(selector)) {
-                elements.set(selector, new FakeElement());
-            }
-            return elements.get(selector);
-        },
-    };
-    const window = {
-        location: {
-            origin: "http://127.0.0.1:4173",
-            search: "?token=renderer-smoke",
-        },
-        addEventListener() {},
-        clearTimeout() {},
-        matchMedia: () => ({
-            matches: false,
-            addEventListener() {},
-        }),
-        setTimeout: () => 1,
-    };
-
-    const originalDescriptors = new Map();
-    for (const [name, value] of Object.entries({
-        document,
-        window,
-        navigator: { language: "en-US" },
-        ResizeObserver: class {
-            observe() {}
-        },
-        EventSource: class {
-            addEventListener() {}
-            close() {}
-        },
-        fetch: async () => ({
-            ok: true,
-            async json() {
-                return {
-                    preferences: {
-                        timeZone: "UTC",
-                        hourCycle: "24",
-                        theme: "midnight",
-                        motion: "reduced",
-                    },
-                };
-            },
-        }),
-    })) {
-        originalDescriptors.set(
-            name,
-            Object.getOwnPropertyDescriptor(globalThis, name),
-        );
-        Object.defineProperty(globalThis, name, {
-            configurable: true,
-            writable: true,
-            value,
         });
-    }
 
-    context.after(() => {
-        for (const [name, descriptor] of originalDescriptors) {
-            if (descriptor) {
-                Object.defineProperty(globalThis, name, descriptor);
-            } else {
-                Reflect.deleteProperty(globalThis, name);
-            }
-        }
-    });
+        await assert.rejects(
+            runSmoke({ ...fixture, timeout: 300 }),
+            (error) => {
+                assert.equal(error.killed, true);
+                assert.equal(error.signal, "SIGKILL");
+                return true;
+            },
+        );
+    },
+);
 
-    const clockCoreUrl = `data:text/javascript;base64,${Buffer.from(
-        clockCoreSource,
-    ).toString("base64")}`;
-    const executableApp = appSource.replace(
-        '"./clock-core.js"',
-        JSON.stringify(clockCoreUrl),
-    );
-    assert.notEqual(executableApp, appSource);
+test(
+    "renderer rejects IDs that exist only inside HTML comments",
+    { timeout: SMOKE_TIMEOUT_MS + 1_000 },
+    async (context) => {
+        const [app, html] = await Promise.all([
+            fs.readFile(appPath, "utf8"),
+            fs.readFile(htmlPath, "utf8"),
+        ]);
+        const fixture = await createFixture(context, {
+            app,
+            html: html.replace('id="app"', '<!-- id="app" -->'),
+        });
 
-    const appUrl = `data:text/javascript;base64,${Buffer.from(
-        executableApp,
-    ).toString("base64")}`;
-    await import(appUrl);
-    await new Promise((resolve) => setImmediate(resolve));
+        await assert.rejects(runSmoke(fixture), (error) => {
+            assert.equal(error.killed, false);
+            assert.match(
+                error.stderr,
+                /missing active markup for #app/,
+            );
+            return true;
+        });
+    },
+);
 
-    assert.equal(elements.get("#app").dataset.ready, "true");
-    assert.equal(document.body.dataset.theme, "midnight");
-    assert.equal(elements.get("#timezoneLabel").textContent, "UTC");
-});
+test(
+    "renderer executes a single-quoted clock-core import",
+    { timeout: SMOKE_TIMEOUT_MS + 1_000 },
+    async (context) => {
+        const [app, html] = await Promise.all([
+            fs.readFile(appPath, "utf8"),
+            fs.readFile(htmlPath, "utf8"),
+        ]);
+        const fixture = await createFixture(context, {
+            app: app.replace(
+                '"./clock-core.js"',
+                "'./clock-core.js'",
+            ),
+            html,
+        });
+
+        await runSmoke(fixture);
+    },
+);
