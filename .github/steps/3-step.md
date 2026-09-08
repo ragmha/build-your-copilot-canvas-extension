@@ -20,8 +20,8 @@ still sees the same clock preferences.
 
 ### ⌨️ Activity: Share and configure preferences
 
-1. Add these SDK and preference imports, then create one store beside the
-   `servers` map:
+1. Replace the existing SDK import with the expanded version below. Then add
+   the preference import and create one store beside the `servers` map:
 
     ```js
     import {

@@ -6,8 +6,7 @@ on:
     branches:
       - main
     paths:
-      - ".github/extensions/flip-clock/extension.mjs"
-      - ".github/extensions/flip-clock/copilot-extension.json"
+      - ".github/extensions/flip-clock/**"
 
 permissions:
   contents: write

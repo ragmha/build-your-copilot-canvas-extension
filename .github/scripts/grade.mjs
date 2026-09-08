@@ -1,10 +1,14 @@
 import { promises as fs } from "node:fs";
+import { execFile } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(SCRIPT_DIRECTORY, "../..");
 const EXTENSION_DIRECTORY = ".github/extensions/flip-clock";
+const execFileAsync = promisify(execFile);
 
 async function readText(root, relativePath) {
     try {
@@ -302,12 +306,75 @@ export async function gradeStep(step, root = DEFAULT_ROOT) {
     return grader(root);
 }
 
-export async function gradeThrough(step, root = DEFAULT_ROOT) {
+export async function gradeRuntimeStep(step, root = DEFAULT_ROOT) {
+    const extensionPath = join(
+        root,
+        EXTENSION_DIRECTORY,
+        "extension.mjs",
+    );
+    const temporaryHome = await fs.mkdtemp(
+        join(tmpdir(), "canvas-runtime-grade-"),
+    );
+
+    try {
+        const { stdout } = await execFileAsync(
+            process.execPath,
+            [
+                "--no-warnings",
+                "--experimental-loader",
+                join(SCRIPT_DIRECTORY, "fake-sdk-loader.mjs"),
+                join(SCRIPT_DIRECTORY, "runtime-probe.mjs"),
+                String(step),
+                extensionPath,
+            ],
+            {
+                cwd: root,
+                env: {
+                    ...process.env,
+                    COPILOT_HOME: temporaryHome,
+                },
+                timeout: 10_000,
+                maxBuffer: 128 * 1024,
+            },
+        );
+        const result = JSON.parse(stdout);
+        return check(
+            `The Step ${step} extension wiring works with a controlled runtime`,
+            result.passed,
+            result.message ??
+                "Make the declared canvas executable, not only text that resembles the lesson snippets.",
+        );
+    } catch (error) {
+        const detail =
+            error instanceof SyntaxError
+                ? "The runtime probe received unexpected stdout. Remove console.log and keep the implementation executable."
+                : error instanceof Error
+                  ? error.message
+                  : String(error);
+        return check(
+            `The Step ${step} extension wiring works with a controlled runtime`,
+            false,
+            `Runtime probe failed: ${detail}`,
+        );
+    } finally {
+        await fs.rm(temporaryHome, { recursive: true, force: true });
+    }
+}
+
+export async function gradeThrough(
+    step,
+    root = DEFAULT_ROOT,
+    { runtime = false } = {},
+) {
     const results = [];
     for (let currentStep = 1; currentStep <= step; currentStep += 1) {
+        const checks = await gradeStep(currentStep, root);
+        if (runtime && currentStep <= 3) {
+            checks.push(await gradeRuntimeStep(currentStep, root));
+        }
         results.push({
             step: currentStep,
-            checks: await gradeStep(currentStep, root),
+            checks,
         });
     }
     return results;
@@ -351,8 +418,18 @@ async function main() {
         .find((argument) => argument !== "--cumulative");
     const root = rootArgument ? resolve(rootArgument) : DEFAULT_ROOT;
     const results = cumulative
-        ? await gradeThrough(step, root)
-        : [{ step, checks: await gradeStep(step, root) }];
+        ? await gradeThrough(step, root, { runtime: true })
+        : [
+              {
+                  step,
+                  checks: [
+                      ...(await gradeStep(step, root)),
+                      ...(step <= 3
+                          ? [await gradeRuntimeStep(step, root)]
+                          : []),
+                  ],
+              },
+          ];
 
     process.stdout.write(
         results

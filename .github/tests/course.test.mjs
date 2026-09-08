@@ -74,21 +74,24 @@ test("step triggers are narrow and advance one workflow at a time", async () => 
     const step3 = await read(".github/workflows/3-step.yml");
     const step4 = await read(".github/workflows/4-last-step.yml");
 
+    assert.match(
+        step1,
+        /paths:\s*\n\s+- "\.github\/extensions\/flip-clock\/extension\.mjs"/,
+    );
+
     for (const workflow of [step1, step2, step3]) {
-        assert.match(
-            workflow,
-            /paths:\s*\n\s+- "\.github\/extensions\/flip-clock\/extension\.mjs"/,
-        );
         assert.match(workflow, /gh workflow disable/);
         assert.match(workflow, /--repo "\$\{\{ github\.repository \}\}" \|\| true/);
         assert.match(workflow, /gh workflow enable "Step [234]"/);
         assert.match(workflow, /comment-author: "github-actions\[bot\]"/);
     }
 
-    assert.match(
-        step4,
-        /paths:[\s\S]*"\.github\/extensions\/flip-clock\/extension\.mjs"[\s\S]*"\.github\/extensions\/flip-clock\/copilot-extension\.json"/,
-    );
+    for (const workflow of [step2, step3, step4]) {
+        assert.match(
+            workflow,
+            /paths:\s*\n\s+- "\.github\/extensions\/flip-clock\/\*\*"/,
+        );
+    }
     assert.match(step4, /finish-exercise\.yml@v0\.9\.1/);
     assert.match(step2, /grade\.mjs 2 --cumulative/);
     assert.match(step3, /grade\.mjs 3 --cumulative/);
