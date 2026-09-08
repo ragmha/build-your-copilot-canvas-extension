@@ -5,7 +5,7 @@ Congratulations, you built a complete project-scoped Copilot canvas extension.
 <img
   width="700"
   alt="The completed Flip Clock canvas"
-  src="../images/flip-clock-preview.svg"
+  src="../images/flip-clock-preview.webp"
 />
 
 You:

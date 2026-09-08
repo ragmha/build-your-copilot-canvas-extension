@@ -7,7 +7,7 @@ extension.
 <img
   width="700"
   alt="A dark split-flap Flip Clock canvas"
-  src="../images/flip-clock-preview.svg"
+  src="../images/flip-clock-preview.webp"
 />
 
 ### 📖 Theory: Extension, canvas, and instance

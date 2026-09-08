@@ -37,6 +37,17 @@ test("all four lessons and the review are present", async () => {
     assert.match(steps[4], /Canvas APIs are experimental/);
 });
 
+test("lesson previews reference existing image files", async () => {
+    for (const name of ["1-step.md", "x-review.md"]) {
+        const path = `.github/steps/${name}`;
+        const lesson = await read(path);
+        const image = /<img\b[^>]*\bsrc="([^"]+)"/.exec(lesson);
+
+        assert.ok(image, `${name} must include the canvas preview`);
+        await fs.access(new URL(image[1], new URL(path, root)));
+    }
+});
+
 test("workflow chain uses the pinned toolkit and current checkout action", async () => {
     const workflowDirectory = new URL(".github/workflows/", root);
     const names = (await fs.readdir(workflowDirectory))
