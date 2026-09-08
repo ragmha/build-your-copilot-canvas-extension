@@ -373,28 +373,28 @@ test("step 4 validates package and hardening artifacts", async (context) => {
             '<time id="accessibleTime"></time><button aria-label="Open clock settings"></button>\n',
     });
 
-    test("step 4 rejects hardening evidence hidden in comments or strings", async (context) => {
-        const root = await fixture(context, {
-            [`${extensionDirectory}/copilot-extension.json`]:
-                '{"name":"flip-clock","version":1}\n',
-            [`${extensionDirectory}/extension.mjs`]:
-                'const evidence = "console.log";\n',
-            [`${extensionDirectory}/lib/server.mjs`]:
-                'const evidence = "randomBytes() timingSafeEqual()";\n',
-            [`${extensionDirectory}/assets/styles.css`]:
-                "/* @media (prefers-reduced-motion: reduce) {} */\n",
-            [`${extensionDirectory}/assets/index.html`]:
-                '<!-- <time id="accessibleTime"></time><button aria-label="Open clock settings"></button> -->\n',
-        });
+    assert.equal(
+        (await gradeStep4(root)).every((item) => item.passed),
+        true,
+    );
+});
 
-        assert.equal(
-            (await gradeStep4(root)).some((item) => !item.passed),
-            true,
-        );
+test("step 4 rejects hardening evidence hidden in comments or strings", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/copilot-extension.json`]:
+            '{"name":"flip-clock","version":1}\n',
+        [`${extensionDirectory}/extension.mjs`]:
+            'const evidence = "console.log";\n',
+        [`${extensionDirectory}/lib/server.mjs`]:
+            'const evidence = "randomBytes() timingSafeEqual()";\n',
+        [`${extensionDirectory}/assets/styles.css`]:
+            "/* @media (prefers-reduced-motion: reduce) {} */\n",
+        [`${extensionDirectory}/assets/index.html`]:
+            '<!-- <time id="accessibleTime"></time><button aria-label="Open clock settings"></button> -->\n',
     });
 
     assert.equal(
-        (await gradeStep4(root)).every((item) => item.passed),
+        (await gradeStep4(root)).some((item) => !item.passed),
         true,
     );
 });
@@ -420,38 +420,6 @@ response.setHeader("Content-Security-Policy", policy);
             '<time id="accessibleTime"></time><button aria-label="Open clock settings"></button>\n',
     });
 
-    test("controlled runtime executes the completed learner solution", async (context) => {
-        const root = await runtimeFixture(context);
-        const results = await gradeThrough(3, root, { runtime: true });
-
-        assert.equal(
-            results.every((result) =>
-                result.checks.every((item) => item.passed),
-            ),
-            true,
-            JSON.stringify(results),
-        );
-    });
-
-    test("controlled runtime rejects implementation text hidden in a string", async (context) => {
-        const root = await runtimeFixture(
-            context,
-            `const gradingEvidence = ${JSON.stringify(completedExtensionSource)};\n`,
-        );
-        const results = await gradeThrough(3, root, { runtime: true });
-
-        assert.equal(
-            results.some((result) =>
-                result.checks.some(
-                    (item) =>
-                        item.description.includes("controlled runtime") &&
-                        !item.passed,
-                ),
-            ),
-            true,
-        );
-    });
-
     for (const step of [1, 2, 3, 4]) {
         const checks = await gradeStep(step, root);
         assert.equal(
@@ -466,6 +434,38 @@ response.setHeader("Content-Security-Policy", policy);
     assert.equal(
         cumulative.every((result) =>
             result.checks.every((item) => item.passed),
+        ),
+        true,
+    );
+});
+
+test("controlled runtime executes the completed learner solution", async (context) => {
+    const root = await runtimeFixture(context);
+    const results = await gradeThrough(3, root, { runtime: true });
+
+    assert.equal(
+        results.every((result) =>
+            result.checks.every((item) => item.passed),
+        ),
+        true,
+        JSON.stringify(results),
+    );
+});
+
+test("controlled runtime rejects implementation text hidden in a string", async (context) => {
+    const root = await runtimeFixture(
+        context,
+        `const gradingEvidence = ${JSON.stringify(completedExtensionSource)};\n`,
+    );
+    const results = await gradeThrough(3, root, { runtime: true });
+
+    assert.equal(
+        results.some((result) =>
+            result.checks.some(
+                (item) =>
+                    item.description.includes("controlled runtime") &&
+                    !item.passed,
+            ),
         ),
         true,
     );
