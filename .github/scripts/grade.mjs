@@ -83,12 +83,12 @@ export async function gradeStep1(root = DEFAULT_ROOT) {
             "Add a one-sentence description that helps Copilot decide when to open the clock.",
         ),
         check(
-            "The canvas declares an `open` handler",
+            "The canvas declares an `open` handler with an initial host result",
             matches(
                 source,
-                /createCanvas\s*\(\s*\{[\s\S]*\bopen\s*:\s*async\s*(?:\([^)]*\)|[^=(),\s]+)\s*=>/,
+                /createCanvas\s*\(\s*\{[\s\S]*\bopen\s*:\s*async\s*(?:\([^)]*\)|[^=(),\s]+)\s*=>[\s\S]{0,1200}?title\s*:\s*["']Flip Clock["']/,
             ),
-            "Add the `open` handler shown in Step 1 inside `createCanvas({ ... })`.",
+            "Add an `open` handler inside `createCanvas({ ... })` that returns a `Flip Clock` title.",
         ),
     ];
 }
@@ -117,12 +117,10 @@ export async function gradeStep2(root = DEFAULT_ROOT) {
         check(
             "`open` reuses a server by `ctx.instanceId` and returns its URL",
             matches(source, /open\s*:\s*async\s*\(\s*ctx\s*\)\s*=>/) &&
-                matches(source, /servers\.get\s*\(\s*ctx\.instanceId\s*\)/) &&
                 matches(
                     source,
-                    /open\s*:\s*async\s*\(\s*ctx\s*\)\s*=>[\s\S]{0,1800}?startClockServer\s*\(\s*\{[\s\S]{0,600}?instanceId\s*:\s*ctx\.instanceId/,
+                    /(?:let|const)\s+entry\s*=\s*servers\.get\s*\(\s*ctx\.instanceId\s*\)\s*;?[\s\S]{0,300}?if\s*\(\s*!entry\s*\)\s*\{[\s\S]{0,800}?entry\s*=\s*await\s+startClockServer\s*\(\s*\{[\s\S]{0,500}?instanceId\s*:\s*ctx\.instanceId[\s\S]{0,500}?\}\s*\)\s*;?[\s\S]{0,300}?servers\.set\s*\(\s*ctx\.instanceId\s*,\s*entry\s*\)/,
                 ) &&
-                matches(source, /servers\.set\s*\(\s*ctx\.instanceId\s*,/) &&
                 matches(source, /url\s*:\s*(?:entry\.)?url/),
             "In `open`, get or start the server for `ctx.instanceId`, save it, and return `url: entry.url`.",
         ),
@@ -156,6 +154,18 @@ export async function gradeStep3(root = DEFAULT_ROOT) {
     );
 
     return [
+        check(
+            "Canvas and preference error types are imported from their owning modules",
+            matches(
+                source,
+                /import\s*\{[^}]*\bCanvasError\b[^}]*\}\s*from\s*["']@github\/copilot-sdk\/extension["']/s,
+            ) &&
+                matches(
+                    source,
+                    /import\s*\{[^}]*\bPREFERENCE_SCHEMA_PROPERTIES\b[^}]*\bPreferenceValidationError\b[^}]*\bcreatePreferenceStore\b[^}]*\}\s*from\s*["']\.\/lib\/preferences\.mjs["']/s,
+                ),
+            "Import `CanvasError` from the extension SDK and import `PREFERENCE_SCHEMA_PROPERTIES`, `PreferenceValidationError`, and `createPreferenceStore` from `./lib/preferences.mjs`.",
+        ),
         check(
             "The extension creates the supplied durable preference store",
             matches(
@@ -191,7 +201,9 @@ export async function gradeStep3(root = DEFAULT_ROOT) {
         ),
         check(
             "Expected validation failures become `CanvasError` results",
-            /PreferenceValidationError/.test(configureAction) &&
+            /error\s+instanceof\s+PreferenceValidationError/.test(
+                configureAction,
+            ) &&
                 /throw\s+new\s+CanvasError\s*\(\s*error\.code\s*,\s*error\.message\s*\)/.test(
                     configureAction,
                 ),

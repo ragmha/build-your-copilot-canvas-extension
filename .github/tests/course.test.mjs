@@ -90,6 +90,10 @@ test("step triggers are narrow and advance one workflow at a time", async () => 
         /paths:[\s\S]*"\.github\/extensions\/flip-clock\/extension\.mjs"[\s\S]*"\.github\/extensions\/flip-clock\/copilot-extension\.json"/,
     );
     assert.match(step4, /finish-exercise\.yml@v0\.9\.1/);
+    assert.match(
+        step4,
+        /node --check \.github\/extensions\/flip-clock\/extension\.mjs/,
+    );
     assert.match(step4, /comment-author: "github-actions\[bot\]"/);
     assert.match(step4, /--repo "\$\{\{ github\.repository \}\}" \|\| true/);
 });

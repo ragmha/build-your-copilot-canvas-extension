@@ -89,6 +89,23 @@ jobs:
           fi
           exit "$status"
 
+      - name: Check extension syntax
+        id: check-syntax
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          node --check .github/extensions/flip-clock/extension.mjs > syntax-output.txt 2>&1
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            printf '\n### Extension syntax\n\n✅ `extension.mjs` parses successfully.\n' >> step-feedback.md
+          else
+            printf '\n### Extension syntax\n\n❌ Fix the syntax error below, then push again.\n\n```text\n' >> step-feedback.md
+            cat syntax-output.txt >> step-feedback.md
+            printf '```\n' >> step-feedback.md
+          fi
+          exit "$status"
+
       - name: Post step results
         if: ${{ always() }}
         uses: GrantBirki/comment@v2.1.1
@@ -102,7 +119,8 @@ jobs:
       - name: Fail when a check needs work
         if: |
           steps.grade-structure.outcome == 'failure' ||
-          steps.test-modules.outcome == 'failure'
+          steps.test-modules.outcome == 'failure' ||
+          steps.check-syntax.outcome == 'failure'
         run: exit 1
 
   post_review_content:

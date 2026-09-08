@@ -39,6 +39,32 @@ test("step 1 reports precise missing requirements", async (context) => {
     assert.match(renderReport(1, checks), /How to fix the remaining checks/);
 });
 
+test("step 1 rejects an empty open handler", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/extension.mjs`]: `
+import {
+    createCanvas,
+    joinSession,
+} from "@github/copilot-sdk/extension";
+await joinSession({
+    canvases: [
+        createCanvas({
+            id: "flip-clock",
+            displayName: "Flip Clock",
+            description: "A useful and sufficiently long canvas description.",
+            open: async () => {},
+        }),
+    ],
+});
+`,
+    });
+
+    assert.equal(
+        (await gradeStep1(root)).some((item) => !item.passed),
+        true,
+    );
+});
+
 test("step 2 accepts lifecycle wiring without importing the SDK", async (context) => {
     const root = await fixture(context, {
         [`${extensionDirectory}/extension.mjs`]: `
@@ -91,6 +117,35 @@ const canvas = {
 `,
         [`${extensionDirectory}/lib/server.mjs`]:
             'server.listen(0, "127.0.0.1");\n',
+    });
+
+    test("step 2 rejects unconditional server replacement", async (context) => {
+        const root = await fixture(context, {
+            [`${extensionDirectory}/extension.mjs`]: `
+    import { startClockServer } from "./lib/server.mjs";
+    const servers = new Map();
+    const canvas = {
+        open: async (ctx) => {
+            let entry = servers.get(ctx.instanceId);
+            entry = await startClockServer({ instanceId: ctx.instanceId });
+            servers.set(ctx.instanceId, entry);
+            return { url: entry.url };
+        },
+        onClose: async (ctx) => {
+            const entry = servers.get(ctx.instanceId);
+            servers.delete(ctx.instanceId);
+            await entry.close();
+        },
+    };
+    `,
+            [`${extensionDirectory}/lib/server.mjs`]:
+                'server.listen(0, "127.0.0.1");\n',
+        });
+
+        assert.equal(
+            (await gradeStep2(root)).some((item) => !item.passed),
+            true,
+        );
     });
 
     assert.equal(
@@ -170,6 +225,47 @@ startClockServer({ preferenceStore });
 const home = process.env.COPILOT_HOME;
 const path = join(home, "extensions", "flip-clock", "artifacts");
 `,
+    });
+
+    test("step 3 rejects unimported or non-instance validation errors", async (context) => {
+        const root = await fixture(context, {
+            [`${extensionDirectory}/extension.mjs`]: `
+    const preferenceStore = createPreferenceStore();
+    const canvas = {
+        actions: [
+            {
+                name: "configure",
+                inputSchema: {
+                    type: "object",
+                    properties: PREFERENCE_SCHEMA_PROPERTIES,
+                    additionalProperties: false,
+                    minProperties: 1,
+                },
+                handler: async (ctx) => {
+                    try {
+                        return await preferenceStore.update(ctx.input ?? {});
+                    } catch (error) {
+                        if (PreferenceValidationError) {
+                            throw new CanvasError(error.code, error.message);
+                        }
+                        throw error;
+                    }
+                },
+            },
+        ],
+    };
+    startClockServer({ preferenceStore });
+    `,
+            [`${extensionDirectory}/lib/preferences.mjs`]: `
+    const home = process.env.COPILOT_HOME;
+    const path = join(home, "extensions", "flip-clock", "artifacts");
+    `,
+        });
+
+        assert.equal(
+            (await gradeStep3(root)).some((item) => !item.passed),
+            true,
+        );
     });
 
     assert.equal(
