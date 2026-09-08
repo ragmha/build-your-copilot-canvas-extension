@@ -27,6 +27,41 @@ function stripComments(source) {
         .replace(/^\s*\/\/.*$/gm, "");
 }
 
+function stripCommentsAndStrings(source) {
+    const withoutComments = stripComments(source);
+    let result = "";
+    let quote = null;
+    let escaped = false;
+
+    for (const character of withoutComments) {
+        if (quote) {
+            if (escaped) {
+                escaped = false;
+            } else if (character === "\\") {
+                escaped = true;
+            } else if (character === quote) {
+                quote = null;
+            }
+            result += character === "\n" ? "\n" : " ";
+            continue;
+        }
+
+        if (
+            character === '"' ||
+            character === "'" ||
+            character === "`"
+        ) {
+            quote = character;
+            result += " ";
+            continue;
+        }
+
+        result += character;
+    }
+
+    return result;
+}
+
 function check(description, passed, fix) {
     return { description, passed: Boolean(passed), fix };
 }
@@ -252,6 +287,10 @@ export async function gradeStep4(root = DEFAULT_ROOT) {
         root,
         `${EXTENSION_DIRECTORY}/assets/index.html`,
     );
+    const executableExtension = stripCommentsAndStrings(extension);
+    const executableServer = stripCommentsAndStrings(server);
+    const activeStyles = styles.replace(/\/\*[\s\S]*?\*\//g, "");
+    const activeHtml = html.replace(/<!--[\s\S]*?-->/g, "");
 
     let manifest;
     try {
@@ -268,25 +307,31 @@ export async function gradeStep4(root = DEFAULT_ROOT) {
         ),
         check(
             "Extension process code does not write to stdout with `console.log`",
-            !/\bconsole\.log\s*\(/.test(`${extension}\n${server}`),
+            !/\bconsole\.log\s*\(/.test(
+                `${executableExtension}\n${executableServer}`,
+            ),
             "Remove `console.log`; stdout is reserved for JSON-RPC. Use `session.log` or stderr for diagnostics.",
         ),
         check(
             "The renderer is protected by a token and restrictive CSP",
-            matches(server, /Content-Security-Policy/) &&
-                matches(server, /timingSafeEqual/) &&
-                matches(server, /randomBytes/),
+            /\brandomBytes\s*\(/.test(executableServer) &&
+                /\btimingSafeEqual\s*\(/.test(executableServer) &&
+                /setHeader\s*\(\s*["']Content-Security-Policy["']/.test(
+                    server,
+                ),
             "Keep the random URL token, timing-safe comparison, and Content-Security-Policy headers in the server.",
         ),
         check(
             "The renderer supports reduced motion",
-            /@media\s*\(prefers-reduced-motion:\s*reduce\)/.test(styles),
+            /@media\s*\(prefers-reduced-motion:\s*reduce\)/.test(
+                activeStyles,
+            ),
             "Keep the `prefers-reduced-motion: reduce` CSS override.",
         ),
         check(
             "The visual clock exposes an accessible text time and labeled controls",
-            /<time[^>]+id=["']accessibleTime["']/.test(html) &&
-                /aria-label=["']Open clock settings["']/.test(html),
+            /<time[^>]+id=["']accessibleTime["']/.test(activeHtml) &&
+                /aria-label=["']Open clock settings["']/.test(activeHtml),
             "Keep the screen-reader `<time>` element and accessible settings label.",
         ),
     ];

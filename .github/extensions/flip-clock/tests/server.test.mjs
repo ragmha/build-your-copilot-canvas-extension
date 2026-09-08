@@ -47,3 +47,28 @@ test("serves a token-protected canvas on loopback", async (context) => {
     assert.equal(state.preferences.theme, "obsidian");
     assert.deepEqual(errors, []);
 });
+
+test("uses a distinct access token for each renderer", async (context) => {
+    const directory = await fs.mkdtemp(join(tmpdir(), "flip-clock-tokens-"));
+    const preferenceStore = new PreferenceStore({
+        filePath: join(directory, "preferences.json"),
+    });
+    const first = await startClockServer({
+        instanceId: "first",
+        preferenceStore,
+    });
+    const second = await startClockServer({
+        instanceId: "second",
+        preferenceStore,
+    });
+
+    context.after(async () => {
+        await Promise.all([first.close(), second.close()]);
+        await fs.rm(directory, { recursive: true, force: true });
+    });
+
+    assert.notEqual(
+        new URL(first.url).searchParams.get("token"),
+        new URL(second.url).searchParams.get("token"),
+    );
+});

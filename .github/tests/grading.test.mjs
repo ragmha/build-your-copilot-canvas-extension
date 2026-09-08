@@ -373,6 +373,26 @@ test("step 4 validates package and hardening artifacts", async (context) => {
             '<time id="accessibleTime"></time><button aria-label="Open clock settings"></button>\n',
     });
 
+    test("step 4 rejects hardening evidence hidden in comments or strings", async (context) => {
+        const root = await fixture(context, {
+            [`${extensionDirectory}/copilot-extension.json`]:
+                '{"name":"flip-clock","version":1}\n',
+            [`${extensionDirectory}/extension.mjs`]:
+                'const evidence = "console.log";\n',
+            [`${extensionDirectory}/lib/server.mjs`]:
+                'const evidence = "randomBytes() timingSafeEqual()";\n',
+            [`${extensionDirectory}/assets/styles.css`]:
+                "/* @media (prefers-reduced-motion: reduce) {} */\n",
+            [`${extensionDirectory}/assets/index.html`]:
+                '<!-- <time id="accessibleTime"></time><button aria-label="Open clock settings"></button> -->\n',
+        });
+
+        assert.equal(
+            (await gradeStep4(root)).some((item) => !item.passed),
+            true,
+        );
+    });
+
     assert.equal(
         (await gradeStep4(root)).every((item) => item.passed),
         true,

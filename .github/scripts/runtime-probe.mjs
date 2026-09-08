@@ -1,6 +1,9 @@
 import { pathToFileURL } from "node:url";
 
-import { CanvasError } from "./fake-copilot-sdk.mjs";
+import {
+    CanvasError,
+    inspectRegistration,
+} from "./fake-copilot-sdk.mjs";
 
 const step = Number.parseInt(process.argv[2], 10);
 const extensionPath = process.argv[3];
@@ -21,7 +24,7 @@ async function closeInstance(instanceId) {
 }
 
 async function probeStep1() {
-    const session = globalThis.__copilotExerciseSession;
+    const session = inspectRegistration();
     assert(session, "`joinSession` was not called.");
     assert(Array.isArray(session.canvases), "No canvases were registered.");
 
@@ -76,6 +79,15 @@ async function probeStep2() {
     );
 
     await closeInstance(instanceId);
+    let rendererStopped = false;
+    try {
+        await fetch(first.url, {
+            signal: AbortSignal.timeout(1_000),
+        });
+    } catch {
+        rendererStopped = true;
+    }
+    assert(rendererStopped, "The onClose handler did not stop the renderer.");
 }
 
 async function probeStep3() {
