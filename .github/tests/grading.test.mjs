@@ -367,6 +367,8 @@ test("step 4 validates package and hardening artifacts", async (context) => {
         [`${extensionDirectory}/extension.mjs`]: "session.log('ready');\n",
         [`${extensionDirectory}/lib/server.mjs`]:
             "randomBytes(); timingSafeEqual(); response.setHeader('Content-Security-Policy', policy);\n",
+        [`${extensionDirectory}/tests/allowed.test.mjs`]:
+            "console.log('test diagnostics are outside the runtime');\n",
         [`${extensionDirectory}/assets/styles.css`]:
             "@media (prefers-reduced-motion: reduce) {}\n",
         [`${extensionDirectory}/assets/index.html`]:
@@ -396,6 +398,32 @@ test("step 4 rejects hardening evidence hidden in comments or strings", async (c
     assert.equal(
         (await gradeStep4(root)).some((item) => !item.passed),
         true,
+    );
+});
+
+test("step 4 rejects console.log in every non-test runtime module", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/copilot-extension.json`]:
+            '{"name":"flip-clock","version":1}\n',
+        [`${extensionDirectory}/extension.mjs`]: "session.log('ready');\n",
+        [`${extensionDirectory}/lib/server.mjs`]:
+            "randomBytes(); timingSafeEqual(); response.setHeader('Content-Security-Policy', policy);\n",
+        [`${extensionDirectory}/lib/preferences.mjs`]:
+            "export function reset() { console.log('reset'); }\n",
+        [`${extensionDirectory}/tests/allowed.test.mjs`]:
+            "console.log('test diagnostics are outside the runtime');\n",
+        [`${extensionDirectory}/assets/styles.css`]:
+            "@media (prefers-reduced-motion: reduce) {}\n",
+        [`${extensionDirectory}/assets/index.html`]:
+            '<time id="accessibleTime"></time><button aria-label="Open clock settings"></button>\n',
+    });
+
+    const checks = await gradeStep4(root);
+    assert.equal(
+        checks.find((item) =>
+            item.description.includes("do not write to stdout"),
+        )?.passed,
+        false,
     );
 });
 

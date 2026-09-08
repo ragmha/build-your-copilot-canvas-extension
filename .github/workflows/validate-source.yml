@@ -44,7 +44,9 @@ jobs:
         run: node --test .github/extensions/flip-clock/tests/*.test.mjs .github/tests/*.test.mjs
 
       - name: Check JavaScript syntax
-        run: find .github -name '*.mjs' -print0 | xargs -0 -n1 node --check
+        run: |
+          find .github -name '*.mjs' -print0 | xargs -0 -n1 node --check
+          node --check .github/extensions/flip-clock/assets/app.js
 
       - name: Confirm the starter has not advanced
         run: |

@@ -74,6 +74,45 @@ async function extensionSource(root) {
     return readText(root, `${EXTENSION_DIRECTORY}/extension.mjs`);
 }
 
+async function readRuntimeModules(root) {
+    const extensionRoot = join(root, EXTENSION_DIRECTORY);
+    const modules = [];
+
+    async function visit(directory) {
+        let entries;
+        try {
+            entries = await fs.readdir(directory, { withFileTypes: true });
+        } catch (error) {
+            if (error && error.code === "ENOENT") {
+                return;
+            }
+            throw error;
+        }
+
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                if (entry.name !== "tests") {
+                    await visit(join(directory, entry.name));
+                }
+                continue;
+            }
+
+            if (
+                entry.isFile() &&
+                entry.name.endsWith(".mjs") &&
+                !entry.name.endsWith(".test.mjs")
+            ) {
+                modules.push(
+                    await fs.readFile(join(directory, entry.name), "utf8"),
+                );
+            }
+        }
+    }
+
+    await visit(extensionRoot);
+    return modules;
+}
+
 export async function gradeStep1(root = DEFAULT_ROOT) {
     const source = await extensionSource(root);
     const description = source.match(
@@ -287,7 +326,10 @@ export async function gradeStep4(root = DEFAULT_ROOT) {
         root,
         `${EXTENSION_DIRECTORY}/assets/index.html`,
     );
-    const executableExtension = stripCommentsAndStrings(extension);
+    const runtimeModules = await readRuntimeModules(root);
+    const executableRuntime = runtimeModules
+        .map(stripCommentsAndStrings)
+        .join("\n");
     const executableServer = stripCommentsAndStrings(server);
     const activeStyles = styles.replace(/\/\*[\s\S]*?\*\//g, "");
     const activeHtml = html.replace(/<!--[\s\S]*?-->/g, "");
@@ -306,10 +348,8 @@ export async function gradeStep4(root = DEFAULT_ROOT) {
             "Create `copilot-extension.json` with `{ \"name\": \"flip-clock\", \"version\": 1 }`.",
         ),
         check(
-            "Extension process code does not write to stdout with `console.log`",
-            !/\bconsole\.log\s*\(/.test(
-                `${executableExtension}\n${executableServer}`,
-            ),
+            "Extension runtime modules do not write to stdout with `console.log`",
+            !/\bconsole\.log\s*\(/.test(executableRuntime),
             "Remove `console.log`; stdout is reserved for JSON-RPC. Use `session.log` or stderr for diagnostics.",
         ),
         check(

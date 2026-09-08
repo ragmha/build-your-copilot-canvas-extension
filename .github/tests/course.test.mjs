@@ -100,6 +100,10 @@ test("step triggers are narrow and advance one workflow at a time", async () => 
         step4,
         /node --check \.github\/extensions\/flip-clock\/extension\.mjs/,
     );
+    assert.match(
+        step4,
+        /node --check \.github\/extensions\/flip-clock\/assets\/app\.js/,
+    );
     assert.match(step4, /comment-author: "github-actions\[bot\]"/);
     assert.match(step4, /--repo "\$\{\{ github\.repository \}\}" \|\| true/);
 });
@@ -112,7 +116,16 @@ test("source validation runs only in the template repository", async () => {
         /github\.repository == 'ragmha\/build-your-copilot-canvas-extension'/,
     );
     assert.match(workflow, /node --test/);
+    assert.match(
+        workflow,
+        /node --check \.github\/extensions\/flip-clock\/assets\/app\.js/,
+    );
     assert.match(workflow, /node \.github\/scripts\/grade\.mjs 4/);
+});
+
+test("controlled runtime probe exercises the reset endpoint", async () => {
+    const probe = await read(".github/scripts/runtime-probe.mjs");
+    assert.match(probe, /["']\/api\/reset["']/);
 });
 
 test("README contains the official copy flow and runtime limitation", async () => {

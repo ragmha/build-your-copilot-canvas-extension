@@ -88,18 +88,19 @@ jobs:
           fi
           exit "$status"
 
-      - name: Check extension syntax
+      - name: Check extension and renderer syntax
         id: check-syntax
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          node --check .github/extensions/flip-clock/extension.mjs > syntax-output.txt 2>&1
-          status=$?
+          status=0
+          node --check .github/extensions/flip-clock/extension.mjs > syntax-output.txt 2>&1 || status=$?
+          node --check .github/extensions/flip-clock/assets/app.js >> syntax-output.txt 2>&1 || status=$?
           if [ "$status" -eq 0 ]; then
-            printf '\n### Extension syntax\n\n✅ `extension.mjs` parses successfully.\n' >> step-feedback.md
+            printf '\n### Runtime syntax\n\n✅ `extension.mjs` and `assets/app.js` parse successfully.\n' >> step-feedback.md
           else
-            printf '\n### Extension syntax\n\n❌ Fix the syntax error below, then push again.\n\n```text\n' >> step-feedback.md
+            printf '\n### Runtime syntax\n\n❌ Fix the extension or renderer syntax error below, then push again.\n\n```text\n' >> step-feedback.md
             cat syntax-output.txt >> step-feedback.md
             printf '```\n' >> step-feedback.md
           fi

@@ -147,6 +147,29 @@ async function probeStep3() {
         state.preferences?.theme === "midnight",
         "The renderer and configure action are not sharing preferences.",
     );
+
+    const resetUrl = new URL("/api/reset", result.url);
+    resetUrl.search = new URL(result.url).search;
+    const resetResponse = await fetch(resetUrl, {
+        method: "POST",
+        headers: { Origin: resetUrl.origin },
+    });
+    assert(resetResponse.ok, "The renderer reset request failed.");
+    const reset = await resetResponse.json();
+    assert(
+        reset.preferences?.theme === "obsidian" &&
+            reset.preferences.hourCycle === "12" &&
+            reset.preferences.motion === "system",
+        "The reset endpoint did not restore default preferences.",
+    );
+
+    const resetState = await fetch(stateUrl).then((response) =>
+        response.json(),
+    );
+    assert(
+        resetState.preferences?.theme === "obsidian",
+        "Reset preferences were not retained by the shared store.",
+    );
     await closeInstance(instanceId);
 }
 
