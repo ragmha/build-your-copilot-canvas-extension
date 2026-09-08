@@ -1,4 +1,4 @@
-name: Step 2
+name: Step 3
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ permissions:
   issues: write
 
 env:
-  STEP_3_FILE: ".github/steps/3-step.md"
+  STEP_4_FILE: ".github/steps/4-step.md"
 
 jobs:
   find_exercise:
@@ -30,7 +30,7 @@ jobs:
     uses: skills/exercise-toolkit/.github/workflows/find-exercise-issue.yml@v0.9.1
 
   check_step_work:
-    name: Grade Step 2
+    name: Grade Step 3
     needs: [find_exercise]
     runs-on: ubuntu-latest
     env:
@@ -66,23 +66,23 @@ jobs:
           file: exercise-toolkit/markdown-templates/step-feedback/checking-work.md
           edit-mode: replace
 
-      - name: Check renderer lifecycle
+      - name: Check action and preference wiring
         id: grade-structure
         continue-on-error: true
-        run: node .github/scripts/grade.mjs 2 > step-feedback.md
+        run: node .github/scripts/grade.mjs 3 > step-feedback.md
 
-      - name: Test loopback renderer
-        id: test-renderer
+      - name: Test preference behavior
+        id: test-preferences
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          node --test .github/extensions/flip-clock/tests/server.test.mjs > test-output.txt 2>&1
+          node --test .github/extensions/flip-clock/tests/preferences.test.mjs > test-output.txt 2>&1
           status=$?
           if [ "$status" -eq 0 ]; then
-            printf '\n### Renderer tests\n\n✅ The loopback server tests passed.\n' >> step-feedback.md
+            printf '\n### Preference tests\n\n✅ Validation and persistence tests passed.\n' >> step-feedback.md
           else
-            printf '\n### Renderer tests\n\n❌ The loopback server tests failed.\n\n```text\n' >> step-feedback.md
+            printf '\n### Preference tests\n\n❌ Preference tests failed.\n\n```text\n' >> step-feedback.md
             cat test-output.txt >> step-feedback.md
             printf '```\n' >> step-feedback.md
           fi
@@ -101,11 +101,11 @@ jobs:
       - name: Fail when a check needs work
         if: |
           steps.grade-structure.outcome == 'failure' ||
-          steps.test-renderer.outcome == 'failure'
+          steps.test-preferences.outcome == 'failure'
         run: exit 1
 
   post_next_step_content:
-    name: Post Step 3
+    name: Post Step 4
     needs: [find_exercise, check_step_work]
     runs-on: ubuntu-latest
     env:
@@ -123,21 +123,21 @@ jobs:
           path: exercise-toolkit
           ref: v0.9.1
 
-      - name: Mark Step 2 complete
+      - name: Mark Step 3 complete
         uses: GrantBirki/comment@v2.1.1
         with:
           repository: ${{ env.ISSUE_REPOSITORY }}
           issue-number: ${{ env.ISSUE_NUMBER }}
           file: exercise-toolkit/markdown-templates/step-feedback/step-finished-prepare-next-step.md
           vars: |
-            next_step_number: 3
+            next_step_number: 4
 
-      - name: Add Step 3
+      - name: Add Step 4
         uses: GrantBirki/comment@v2.1.1
         with:
           repository: ${{ env.ISSUE_REPOSITORY }}
           issue-number: ${{ env.ISSUE_NUMBER }}
-          file: ${{ env.STEP_3_FILE }}
+          file: ${{ env.STEP_4_FILE }}
 
       - name: Watch for progress
         uses: GrantBirki/comment@v2.1.1
@@ -150,7 +150,7 @@ jobs:
         run: |
           gh workflow disable "${{ github.workflow }}" \
             --repo "${{ github.repository }}" || true
-          gh workflow enable "Step 3" \
+          gh workflow enable "Step 4" \
             --repo "${{ github.repository }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

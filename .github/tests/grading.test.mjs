@@ -1,0 +1,218 @@
+import assert from "node:assert/strict";
+import { promises as fs } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+import {
+    gradeStep,
+    gradeStep1,
+    gradeStep2,
+    gradeStep3,
+    gradeStep4,
+    renderReport,
+} from "../scripts/grade.mjs";
+
+const extensionDirectory = ".github/extensions/flip-clock";
+
+async function fixture(context, files) {
+    const root = await fs.mkdtemp(join(tmpdir(), "canvas-grader-"));
+    context.after(() => fs.rm(root, { recursive: true, force: true }));
+
+    for (const [relativePath, contents] of Object.entries(files)) {
+        const path = join(root, relativePath);
+        await fs.mkdir(join(path, ".."), { recursive: true });
+        await fs.writeFile(path, contents, "utf8");
+    }
+    return root;
+}
+
+test("step 1 reports precise missing requirements", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/extension.mjs`]:
+            'import { createCanvas } from "@github/copilot-sdk/extension";\n',
+    });
+
+    const checks = await gradeStep1(root);
+    assert.equal(checks[0].passed, true);
+    assert.equal(checks.some((item) => !item.passed), true);
+    assert.match(renderReport(1, checks), /How to fix the remaining checks/);
+});
+
+test("step 2 accepts lifecycle wiring without importing the SDK", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/extension.mjs`]: `
+import { startClockServer } from "./lib/server.mjs";
+const servers = new Map();
+const canvas = {
+    open: async (ctx) => {
+        let entry = servers.get(ctx.instanceId);
+        if (!entry) {
+            entry = await startClockServer({ instanceId: ctx.instanceId });
+            servers.set(ctx.instanceId, entry);
+        }
+        return { url: entry.url };
+    },
+    onClose: async (ctx) => {
+        const entry = servers.get(ctx.instanceId);
+        servers.delete(ctx.instanceId);
+        await entry.close();
+    },
+};
+`,
+        [`${extensionDirectory}/lib/server.mjs`]:
+            'server.listen(0, "127.0.0.1");\n',
+    });
+
+    assert.equal(
+        (await gradeStep2(root)).every((item) => item.passed),
+        true,
+    );
+});
+
+test("step 3 accepts schema-backed durable preference wiring", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/extension.mjs`]: `
+import {
+    PREFERENCE_SCHEMA_PROPERTIES,
+    createPreferenceStore,
+} from "./lib/preferences.mjs";
+const preferenceStore = createPreferenceStore();
+const action = {
+    name: "configure",
+    inputSchema: {
+        properties: PREFERENCE_SCHEMA_PROPERTIES,
+        additionalProperties: false,
+        minProperties: 1,
+    },
+    handler: async (ctx) =>
+        await preferenceStore.update(ctx.input ?? {}),
+};
+startClockServer({ preferenceStore });
+`,
+        [`${extensionDirectory}/lib/preferences.mjs`]: `
+const home = process.env.COPILOT_HOME;
+const path = join(home, "extensions", "flip-clock", "artifacts");
+`,
+    });
+
+    assert.equal(
+        (await gradeStep3(root)).every((item) => item.passed),
+        true,
+    );
+});
+
+test("step 4 validates package and hardening artifacts", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/copilot-extension.json`]:
+            '{"name":"flip-clock","version":1}\n',
+        [`${extensionDirectory}/extension.mjs`]: "session.log('ready');\n",
+        [`${extensionDirectory}/lib/server.mjs`]:
+            "randomBytes(); timingSafeEqual(); response.setHeader('Content-Security-Policy', policy);\n",
+        [`${extensionDirectory}/assets/styles.css`]:
+            "@media (prefers-reduced-motion: reduce) {}\n",
+        [`${extensionDirectory}/assets/index.html`]:
+            '<time id="accessibleTime"></time><button aria-label="Open clock settings"></button>\n',
+    });
+
+    assert.equal(
+        (await gradeStep4(root)).every((item) => item.passed),
+        true,
+    );
+});
+
+test("a completed learner solution passes all four graders", async (context) => {
+    const root = await fixture(context, {
+        [`${extensionDirectory}/extension.mjs`]: `
+import {
+    CanvasError,
+    createCanvas,
+    joinSession,
+} from "@github/copilot-sdk/extension";
+import {
+    PREFERENCE_SCHEMA_PROPERTIES,
+    PreferenceValidationError,
+    createPreferenceStore,
+} from "./lib/preferences.mjs";
+import { startClockServer } from "./lib/server.mjs";
+
+const preferenceStore = createPreferenceStore();
+const servers = new Map();
+
+await joinSession({
+    canvases: [
+        createCanvas({
+            id: "flip-clock",
+            displayName: "Flip Clock",
+            description:
+                "A serene split-flap clock with timezone, theme, and motion controls.",
+            actions: [
+                {
+                    name: "configure",
+                    inputSchema: {
+                        type: "object",
+                        properties: PREFERENCE_SCHEMA_PROPERTIES,
+                        additionalProperties: false,
+                        minProperties: 1,
+                    },
+                    handler: async (ctx) => {
+                        try {
+                            return await preferenceStore.update(ctx.input ?? {});
+                        } catch (error) {
+                            if (error instanceof PreferenceValidationError) {
+                                throw new CanvasError(error.code, error.message);
+                            }
+                            throw error;
+                        }
+                    },
+                },
+            ],
+            open: async (ctx) => {
+                let entry = servers.get(ctx.instanceId);
+                if (!entry) {
+                    entry = await startClockServer({
+                        instanceId: ctx.instanceId,
+                        preferenceStore,
+                    });
+                    servers.set(ctx.instanceId, entry);
+                }
+                return { title: "Flip Clock", url: entry.url };
+            },
+            onClose: async (ctx) => {
+                const entry = servers.get(ctx.instanceId);
+                if (entry) {
+                    servers.delete(ctx.instanceId);
+                    await entry.close();
+                }
+            },
+        }),
+    ],
+});
+`,
+        [`${extensionDirectory}/lib/preferences.mjs`]: `
+const home = process.env.COPILOT_HOME;
+const path = join(home, "extensions", "flip-clock", "artifacts");
+`,
+        [`${extensionDirectory}/lib/server.mjs`]: `
+server.listen(0, "127.0.0.1");
+randomBytes();
+timingSafeEqual();
+response.setHeader("Content-Security-Policy", policy);
+`,
+        [`${extensionDirectory}/copilot-extension.json`]:
+            '{"name":"flip-clock","version":1}\n',
+        [`${extensionDirectory}/assets/styles.css`]:
+            "@media (prefers-reduced-motion: reduce) {}\n",
+        [`${extensionDirectory}/assets/index.html`]:
+            '<time id="accessibleTime"></time><button aria-label="Open clock settings"></button>\n',
+    });
+
+    for (const step of [1, 2, 3, 4]) {
+        const checks = await gradeStep(step, root);
+        assert.equal(
+            checks.every((item) => item.passed),
+            true,
+            `Step ${step}: ${JSON.stringify(checks)}`,
+        );
+    }
+});

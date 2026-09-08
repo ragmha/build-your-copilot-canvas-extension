@@ -1,11 +1,12 @@
-name: Step 0 # Start Exercise
+name: Step 0
 
 on:
   workflow_dispatch:
-  # NOTE: Make sure the repository is a template before enabling this trigger.
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/steps/1-step.md"
 
 permissions:
   contents: write
@@ -18,17 +19,18 @@ env:
 jobs:
   start_exercise:
     if: |
-      !github.event.repository.is_template
+      !github.event.repository.is_template &&
+      github.repository != 'ragmha/build-your-copilot-canvas-extension'
     name: Start Exercise
     uses: skills/exercise-toolkit/.github/workflows/start-exercise.yml@v0.9.1
     with:
-      exercise-title: "(replace-me: Exercise title)"
-      intro-message: "(replace-me: Brief one line introduction message for the exercise)"
+      exercise-title: "Build a Copilot Canvas Extension"
+      intro-message: "Build a polished Flip Clock while learning the canvas extension lifecycle."
 
   post_next_step_content:
-    name: Post next step content
-    runs-on: ubuntu-latest
+    name: Post Step 1
     needs: [start_exercise]
+    runs-on: ubuntu-latest
     env:
       ISSUE_NUMBER: ${{ needs.start_exercise.outputs.issue-number }}
       ISSUE_REPOSITORY: ${{ github.repository }}
@@ -46,25 +48,25 @@ jobs:
           path: exercise-toolkit
           ref: v0.9.1
 
-      - name: Create comment - add step content
+      - name: Add Step 1
         uses: GrantBirki/comment@v2.1.1
         with:
           repository: ${{ env.ISSUE_REPOSITORY }}
           issue-number: ${{ env.ISSUE_NUMBER }}
           file: ${{ env.STEP_1_FILE }}
-          vars: |
-            login: ${{ github.actor }}
-            full_repo_name: ${{ github.repository }}
 
-      - name: Create comment - watching for progress
+      - name: Watch for progress
         uses: GrantBirki/comment@v2.1.1
         with:
           repository: ${{ env.ISSUE_REPOSITORY }}
           issue-number: ${{ env.ISSUE_NUMBER }}
           file: exercise-toolkit/markdown-templates/step-feedback/watching-for-progress.md
 
-      - name: Enable next step workflow
+      - name: Advance workflow state
         run: |
-          gh workflow enable "Step 1"
+          gh workflow disable "${{ github.workflow }}" \
+            --repo "${{ github.repository }}" || true
+          gh workflow enable "Step 1" \
+            --repo "${{ github.repository }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

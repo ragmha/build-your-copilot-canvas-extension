@@ -1,36 +1,69 @@
-## Step 1: (replace-me: STEP-NAME)
+## Step 1: Declare the canvas
 
-(replace-me: OPTIONAL Brief story or scenario to introduce the step)
+Your repository already contains the finished visual assets and framework-free
+helpers. Your first job is to make GitHub Copilot discover a project-scoped
+extension.
 
-(replace-me: OPTIONAL Reference images from the `.github/images/` directory to support any part of the content)
+<img
+  width="700"
+  alt="A dark split-flap Flip Clock canvas"
+  src="../images/flip-clock-preview.svg"
+/>
 
-<img width="200" alt="descriptive alt text" src="../images/inspectocat.png" />
+### 📖 Theory: Extension, canvas, and instance
 
-### 📖 Theory: (replace-me: Theory title)
+A **Copilot extension** is a process discovered from an immediate subdirectory
+of `.github/extensions/`. Its entry point must be named `extension.mjs`.
 
-<!-- GitHub-styled notifications can be used outside of ordered lists. Available options are: NOTE, IMPORTANT, WARNING, TIP, CAUTION -->
-<!--
-> [!NOTE]
-> (Important note or additional information relevant to this section)
- -->
+A **canvas** is one UI type declared by that extension. The runtime derives the
+extension ID, while you choose:
 
-(replace-me: Optional theory or background information relevant to this step)
+- `canvasId`: the stable type ID, here `flip-clock`.
+- `instanceId`: the temporary panel handle supplied to `open`.
 
+`joinSession` connects the extension, and `createCanvas` keeps the declaration
+next to its lifecycle handlers. The SDK is supplied by the local Copilot
+runtime, so do not add it to `package.json`.
 
-### ⌨️ Activity: (replace-me: Activity title)
+### ⌨️ Activity: Register `flip-clock`
 
-1. (replace-me: First instruction)
+1. Create `.github/extensions/flip-clock/extension.mjs` with this declaration:
 
-    (replace-me: Make sure to properly indent any multiline instructions)
+    ```js
+    import {
+        createCanvas,
+        joinSession,
+    } from "@github/copilot-sdk/extension";
 
-1. (replace-me: Second instruction)
+    await joinSession({
+        canvases: [
+            createCanvas({
+                id: "flip-clock",
+                displayName: "Flip Clock",
+                description:
+                    "A serene split-flap clock with timezone, theme, and motion controls.",
+                open: async () => ({
+                    title: "Flip Clock",
+                    status: "Renderer arrives in Step 2",
+                }),
+            }),
+        ],
+    });
+    ```
 
-1. (replace-me: Additional instructions as needed)
+1. Commit the new file directly to `main`.
+
+The **Step 1** workflow checks the extension location, SDK import, session
+registration, and canvas metadata. If a check fails, fix the reported item and
+push again; the workflow is intentionally retriggerable.
 
 <details>
 <summary>Having trouble? 🤷</summary><br/>
 
-- (replace-me: Troubleshooting tip or hint)
-- (replace-me: Additional troubleshooting tips as needed)
+- Confirm the file is exactly
+  `.github/extensions/flip-clock/extension.mjs`.
+- Keep the canvas ID lowercase and hyphenated: `flip-clock`.
+- Do not install `@github/copilot-sdk`; GitHub Actions grades this step
+  statically because the SDK is bundled only with the desktop/CLI runtime.
 
 </details>
